@@ -1,0 +1,22 @@
+Title:
+Allocating Examination Time Slots Using
+CSP with Minimum Remaining Values
+Compared with Fixed Variable Ordering to
+Reduce Backtracking
+
+Module Titles: Conflict graph; CSP solver;
+Schedule evaluation
+Project Components, Requirements: Enrolment data; examination
+slots; conflict constraints;
+two ordering strategies
+
+Task: Assign examination slots
+without student clashes
+
+Specific Parameters: Course count; available
+slots; student overlap;
+identical value ordering
+
+Outcome/Outcome: Backtracking operations;
+runtime (ms); clash count
+ 

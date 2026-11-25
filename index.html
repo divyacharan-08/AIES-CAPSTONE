@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en" class="dark-theme">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allocating Examination Time Slots Using CSP | MRV vs Fixed Variable Ordering</title>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js for performance visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+    <!-- Ambient Background Dynamic Lighting -->
+    <div class="ambient-lighting">
+        <div class="ambient-blob blob-1"></div>
+        <div class="ambient-blob blob-2"></div>
+        <div class="ambient-blob blob-3"></div>
+    </div>
+
+    <!-- Floating macOS Translucent Navigation Bar -->
+    <header class="app-navbar">
+        <div class="nav-brand">
+            <div class="traffic-lights">
+                <span class="tl-dot tl-close"></span>
+                <span class="tl-dot tl-min"></span>
+                <span class="tl-dot tl-max"></span>
+            </div>
+            <div class="brand-text">
+                <span class="brand-title">
+                    <i data-lucide="cpu" style="width: 17px; height: 17px; color: var(--apple-blue);"></i>
+                    CSP Exam Allocator
+                </span>
+                <span class="brand-subtitle">MRV vs Fixed Variable Ordering</span>
+            </div>
+        </div>
+
+        <nav class="nav-links">
+            <button class="nav-item active" data-nav-target="dashboard">
+                <i data-lucide="layout-dashboard"></i> Dashboard
+            </button>
+            <button class="nav-item" data-nav-target="enrolment">
+                <i data-lucide="users"></i> Enrolment Data
+            </button>
+            <button class="nav-item" data-nav-target="conflict-graph">
+                <i data-lucide="share-2"></i> Conflict Graph
+            </button>
+            <button class="nav-item" data-nav-target="csp-solver">
+                <i data-lucide="git-branch"></i> CSP Solver
+            </button>
+            <button class="nav-item" data-nav-target="timetable">
+                <i data-lucide="calendar"></i> Timetable
+            </button>
+            <button class="nav-item" data-nav-target="evaluation">
+                <i data-lucide="bar-chart-2"></i> Evaluation
+            </button>
+        </nav>
+
+        <div class="nav-controls">
+            <!-- Dataset Preset Selector -->
+            <select id="presetSelector" class="select-pill" title="Load Benchmark Dataset">
+                <option value="default" selected>Default Sample (4 Courses, 5 Students)</option>
+                <option value="university">University Benchmark (10 Courses, 24 Students, 4 Slots)</option>
+                <option value="dense">Dense Challenge (12 Courses, 20 Students, 5 Slots)</option>
+                <option value="pigeonhole">Unsolvable Test (K4 Clique, 3 Slots - Pigeonhole)</option>
+            </select>
+
+            <!-- Theme Toggle Button -->
+            <button id="themeToggleBtn" class="btn-icon" title="Toggle Light / Dark Mode">
+                <span id="themeIcon"><i data-lucide="sun"></i></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Application Viewport -->
+    <main class="main-content">
+
+        <!-- ==========================================================================
+             MODULE 1: DASHBOARD
+             ========================================================================== -->
+        <section id="section-dashboard" class="module-section active">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <h2>Examination Scheduling Overview</h2>
+                    <p class="section-desc">Automated clash-free exam time slot allocation using CSP backtracking algorithms.</p>
+                </div>
+                <div class="section-header-actions">
+                    <span id="dashSolverStatusBadge" class="status-pill neutral">
+                        <span class="dot"></span> Ready to Solve
+                    </span>
+                    <button id="dashRunSolverBtn" class="btn btn-primary">
+                        <i data-lucide="play"></i> Run CSP Benchmark
+                    </button>
+                </div>
+            </div>
+
+            <!-- Glassmorphism Stat Cards -->
+            <div class="stat-cards-grid">
+                <div class="glass-card stat-card">
+                    <div class="stat-icon-wrapper icon-blue">
+                        <i data-lucide="book-open"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Courses</span>
+                        <div id="dashStatCourses" class="stat-value">0</div>
+                        <span class="stat-footer-text">Variables in CSP</span>
+                    </div>
+                </div>
+
+                <div class="glass-card stat-card">
+                    <div class="stat-icon-wrapper icon-purple">
+                        <i data-lucide="clock"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Available Slots</span>
+                        <div id="dashStatSlots" class="stat-value">0</div>
+                        <span class="stat-footer-text">Domain Values</span>
+                    </div>
+                </div>
+
+                <div class="glass-card stat-card">
+                    <div class="stat-icon-wrapper icon-green">
+                        <i data-lucide="users"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Students</span>
+                        <div id="dashStatStudents" class="stat-value">0</div>
+                        <span class="stat-footer-text">Enrolled Examinees</span>
+                    </div>
+                </div>
+
+                <div class="glass-card stat-card">
+                    <div class="stat-icon-wrapper icon-red">
+                        <i data-lucide="alert-triangle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Detected Conflicts</span>
+                        <div id="dashStatConflicts" class="stat-value">0</div>
+                        <span class="stat-footer-text">Binary Constraints</span>
+                    </div>
+                </div>
+
+                <div class="glass-card stat-card">
+                    <div class="stat-icon-wrapper icon-orange">
+                        <i data-lucide="check-circle-2"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Scheduled Courses</span>
+                        <div id="dashStatScheduled" class="stat-value">0</div>
+                        <span class="stat-footer-text">0 Student Clashes</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Split Layout -->
+            <div class="dashboard-split-grid">
+                <!-- Conflict Degree Distribution -->
+                <div class="glass-card">
+                    <div class="card-header-clean">
+                        <div class="card-title-wrap">
+                            <i data-lucide="bar-chart-2" style="color: var(--apple-blue);"></i>
+                            <h3>Course Conflict Degree Distribution</h3>
+                        </div>
+                        <span class="badge badge-course">Constraint Density</span>
+                    </div>
+                    <p class="section-desc" style="margin-bottom: 14px;">Number of conflicting examination neighbors per course (students enrolled in both).</p>
+                    <div class="chart-container-mini">
+                        <canvas id="dashConflictMiniChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Quick Actions & Overview -->
+                <div class="glass-card">
+                    <div class="card-header-clean">
+                        <div class="card-title-wrap">
+                            <i data-lucide="compass" style="color: var(--apple-purple);"></i>
+                            <h3>Quick Actions</h3>
+                        </div>
+                    </div>
+                    <div class="quick-actions-grid">
+                        <div class="quick-action-card" onclick="window.uiController.switchTab('csp-solver')">
+                            <i data-lucide="cpu"></i>
+                            <div class="qa-text">
+                                <strong>CSP Solver</strong>
+                                <span>Run MRV vs FVO</span>
+                            </div>
+                        </div>
+
+                        <div class="quick-action-card" onclick="window.uiController.switchTab('conflict-graph')">
+                            <i data-lucide="share-2"></i>
+                            <div class="qa-text">
+                                <strong>Conflict Graph</strong>
+                                <span>Inspect overlaps</span>
+                            </div>
+                        </div>
+
+                        <div class="quick-action-card" onclick="window.uiController.switchTab('timetable')">
+                            <i data-lucide="calendar"></i>
+                            <div class="qa-text">
+                                <strong>Timetable</strong>
+                                <span>Export & Print</span>
+                            </div>
+                        </div>
+
+                        <div class="quick-action-card" onclick="window.uiController.switchTab('evaluation')">
+                            <i data-lucide="award"></i>
+                            <div class="qa-text">
+                                <strong>Evaluation</strong>
+                                <span>Backtrack reduction</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--divider);">
+                        <h4 style="font-size: 13px; font-weight: 700; margin-bottom: 6px;">Fair Comparison Guarantee</h4>
+                        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45;">
+                            Both algorithms run on identical course variables, identical domain examination slots, identical constraint matrices, and identical slot value ordering.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             MODULE 2: ENROLMENT DATA
+             ========================================================================== -->
+        <section id="section-enrolment" class="module-section">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <h2>Student Enrolment & Examination Slots</h2>
+                    <p class="section-desc">Manage student courses, curricula, and available examination windows.</p>
+                </div>
+                <div class="section-header-actions">
+                    <button class="btn btn-secondary" id="importCsvBtn">
+                        <i data-lucide="upload"></i> Import CSV
+                    </button>
+                    <button class="btn btn-secondary" id="exportStudentsCsvBtn">
+                        <i data-lucide="download"></i> Export CSV
+                    </button>
+                    <button class="btn btn-primary" onclick="window.openAddStudentModal()">
+                        <i data-lucide="user-plus"></i> Add Student
+                    </button>
+                    <button class="btn btn-primary" onclick="window.openAddCourseModal()">
+                        <i data-lucide="plus-circle"></i> Add Course
+                    </button>
+                    <button class="btn btn-primary" onclick="window.openAddSlotModal()">
+                        <i data-lucide="calendar-plus"></i> Add Exam Slot
+                    </button>
+                </div>
+            </div>
+
+            <!-- Enrolment Data Tabs -->
+            <div class="tabs-subnav">
+                <button class="subnav-btn active" onclick="showSubTable('students', this)">Students & Enrolments</button>
+                <button class="subnav-btn" onclick="showSubTable('courses', this)">Courses (Variables)</button>
+                <button class="subnav-btn" onclick="showSubTable('slots', this)">Exam Slots (Domains)</button>
+            </div>
+
+            <!-- 1. Students Table -->
+            <div id="subTable-students" class="glass-card" style="padding: 10px;">
+                <div class="table-responsive">
+                    <table class="glass-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 120px;">Student ID</th>
+                                <th style="width: 220px;">Student Name</th>
+                                <th>Enrolled Courses</th>
+                                <th class="action-cell" style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. Courses Table -->
+            <div id="subTable-courses" class="glass-card" style="padding: 10px; display: none;">
+                <div class="table-responsive">
+                    <table class="glass-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 140px;">Course Code</th>
+                                <th>Course Title</th>
+                                <th style="width: 180px;">Department</th>
+                                <th style="width: 140px;">Enrolled Count</th>
+                                <th class="action-cell" style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coursesTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. Slots Table -->
+            <div id="subTable-slots" class="glass-card" style="padding: 10px; display: none;">
+                <div class="table-responsive">
+                    <table class="glass-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 140px;">Slot Code</th>
+                                <th style="width: 140px;">Date</th>
+                                <th style="width: 160px;">Time Window</th>
+                                <th style="width: 180px;">Examination Room</th>
+                                <th style="width: 120px;">Capacity</th>
+                                <th class="action-cell" style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slotsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             MODULE 3: CONFLICT GRAPH
+             ========================================================================== -->
+        <section id="section-conflict-graph" class="module-section">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <h2>Interactive Course Conflict Graph</h2>
+                    <p class="section-desc">Nodes represent courses. Edges denote student exam clashes. Edge weights show common student counts.</p>
+                </div>
+                <div class="section-header-actions">
+                    <button id="graphTogglePhysicsBtn" class="btn btn-secondary active">
+                        <i data-lucide="play-circle"></i> Physics Simulation
+                    </button>
+                    <button id="graphResetViewBtn" class="btn btn-secondary">
+                        <i data-lucide="refresh-cw"></i> Reset Layout
+                    </button>
+                </div>
+            </div>
+
+            <div class="graph-layout-container">
+                <!-- Canvas Wrapper -->
+                <div id="graphCanvasContainer" class="graph-canvas-wrapper">
+                    <canvas id="conflictGraphCanvas"></canvas>
+
+                    <!-- Floating Graph Hover Tooltip -->
+                    <div id="graphHoverTooltip" class="graph-tooltip"></div>
+
+                    <!-- Floating Metrics Bar -->
+                    <div class="graph-metrics-bar">
+                        <div class="metric-item"><span>Courses (Nodes):</span> <strong id="graphTotalNodes">0</strong></div>
+                        <div class="metric-item"><span>Clashes (Edges):</span> <strong id="graphTotalEdges">0</strong></div>
+                        <div class="metric-item"><span>Max Degree:</span> <strong id="graphMaxDegree">0</strong></div>
+                        <div class="metric-item"><span>Graph Density:</span> <strong id="graphDensity">0%</strong></div>
+                    </div>
+                </div>
+
+                <!-- Conflict Details Inspector Sidebar -->
+                <div class="glass-card inspector-sidebar">
+                    <div class="card-header-clean">
+                        <div class="card-title-wrap">
+                            <i data-lucide="info" style="color: var(--apple-blue);"></i>
+                            <h3>Conflict Inspector</h3>
+                        </div>
+                    </div>
+                    <div id="graphInspectorPanel" class="inspector-body">
+                        <!-- Populated when clicking a node or edge -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             MODULE 4: CSP SOLVER
+             ========================================================================== -->
+        <section id="section-csp-solver" class="module-section">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <h2>CSP Variable-Ordering Solver</h2>
+                    <p class="section-desc">Comparing Minimum Remaining Values (MRV) vs Fixed Variable Ordering (FVO) under identical constraints.</p>
+                </div>
+                <div class="section-header-actions">
+                    <button id="runBenchmarkBtn" class="btn btn-primary">
+                        <i data-lucide="play"></i> Run CSP Benchmark & Compare
+                    </button>
+                    <button id="runSingleMrvBtn" class="btn btn-secondary">
+                        <i data-lucide="zap"></i> Run MRV Only
+                    </button>
+                    <button id="runSingleFvoBtn" class="btn btn-secondary">
+                        <i data-lucide="list-ordered"></i> Run Fixed Ordering Only
+                    </button>
+                </div>
+            </div>
+
+            <!-- Algorithm Details Grid -->
+            <div class="solver-overview-grid">
+                <!-- Algorithm A: MRV -->
+                <div class="algo-card glass-card">
+                    <div class="algo-header">
+                        <span class="badge badge-course-solid">Algorithm A</span>
+                        <span class="status-pill success"><span class="dot"></span> Fail-First Heuristic</span>
+                    </div>
+                    <h3 class="algo-title">Minimum Remaining Values (MRV)</h3>
+                    <p class="algo-desc">
+                        Selects the unassigned course with the fewest legal examination slots remaining. Prunes search trees early by encountering unavoidable dead-ends at higher decision levels.
+                    </p>
+                    <ul class="algo-steps">
+                        <li><span class="step-bullet">1</span> Calculate available valid slots for all unassigned courses.</li>
+                        <li><span class="step-bullet">2</span> Select course with minimum legal domain size.</li>
+                        <li><span class="step-bullet">3</span> Tie-breaker: Degree Heuristic (most conflicting neighbors), then lexicographical.</li>
+                        <li><span class="step-bullet">4</span> Assign first valid slot according to shared value ordering.</li>
+                        <li><span class="step-bullet">5</span> Backtrack immediately when domain wipeout is detected.</li>
+                    </ul>
+                </div>
+
+                <!-- Algorithm B: Fixed Ordering -->
+                <div class="algo-card glass-card">
+                    <div class="algo-header">
+                        <span class="badge badge-course">Algorithm B</span>
+                        <span class="status-pill neutral"><span class="dot"></span> Static Ordering</span>
+                    </div>
+                    <h3 class="algo-title">Fixed Variable Ordering (FVO)</h3>
+                    <p class="algo-desc">
+                        Courses are considered in a predefined static order (order of declaration). Without domain awareness, deep futile subtrees are repeatedly explored before backtracking.
+                    </p>
+                    <ul class="algo-steps">
+                        <li><span class="step-bullet">1</span> Arrange courses in a predetermined fixed sequence.</li>
+                        <li><span class="step-bullet">2</span> Select the next course in static sequence.</li>
+                        <li><span class="step-bullet">3</span> Check consistency against already assigned conflicting neighbors.</li>
+                        <li><span class="step-bullet">4</span> Assign first valid slot according to identical value ordering.</li>
+                        <li><span class="step-bullet">5</span> Backtrack if no valid slot can be assigned.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Decision Trace Log Drawer -->
+            <div class="glass-card" style="margin-top: 20px;">
+                <div class="card-header-clean">
+                    <div class="card-title-wrap">
+                        <i data-lucide="terminal" style="color: var(--apple-blue);"></i>
+                        <h3 id="traceAlgorithmTitle">CSP Decision Trace Log</h3>
+                    </div>
+                    <span class="badge badge-course">Backtracking Operations Inspector</span>
+                </div>
+                <div id="traceLogList" class="trace-log-container">
+                    <div class="empty-trace">Run the solver to view the real-time variable assignment and backtracking trace.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             MODULE 5: SCHEDULE GENERATION (TIMETABLE)
+             ========================================================================== -->
+        <section id="section-timetable" class="module-section">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <h2>Examination Timetable</h2>
+                    <p class="section-desc" id="timetableActiveAlgoLabel">Interactive calendar grid showing clash-free exam allocations per time slot.</p>
+                </div>
+                <div class="section-header-actions">
+                    <button id="viewMrvScheduleBtn" class="btn btn-secondary active">
+                        <i data-lucide="check"></i> View MRV Schedule
+                    </button>
+                    <button id="viewFvoScheduleBtn" class="btn btn-secondary">
+                        View Fixed Ordering Schedule
+                    </button>
+                    <button id="exportTimetableCsvBtn" class="btn btn-secondary">
+                        <i data-lucide="download"></i> Download CSV
+                    </button>
+                    <button id="printTimetableBtn" class="btn btn-primary">
+                        <i data-lucide="printer"></i> Print Timetable
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zero Clashes Banner -->
+            <div id="timetableClashBanner" class="status-banner neutral">
+                <i data-lucide="info"></i>
+                <div>
+                    <strong>Schedule Status</strong>
+                    <p>Execute the CSP solver to generate an optimal conflict-free examination timetable.</p>
+                </div>
+            </div>
+
+            <!-- Timetable Empty State -->
+            <div id="timetableEmptyState" class="glass-card" style="text-align: center; padding: 48px; display: none;">
+                <i data-lucide="calendar-x" style="width: 48px; height: 48px; color: var(--text-tertiary); margin-bottom: 12px;"></i>
+                <h3 style="font-size: 18px; margin-bottom: 6px;">No Timetable Generated</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 18px;">Run the CSP solver to allocate courses to available examination slots.</p>
+                <button class="btn btn-primary" onclick="window.uiController.switchTab('csp-solver')">
+                    <i data-lucide="play"></i> Open Solver
+                </button>
+            </div>
+
+            <!-- Timetable Slot Columns Grid -->
+            <div id="timetableGridContainer" class="timetable-grid">
+                <!-- Dynamically populated -->
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             MODULE 6: SCHEDULE EVALUATION
+             ========================================================================== -->
+        <section id="section-evaluation" class="module-section">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <h2>Algorithmic Performance Evaluation</h2>
+                    <p class="section-desc">Rigorous empirical comparison of MRV versus Fixed Variable Ordering on identical inputs.</p>
+                </div>
+                <div class="section-header-actions">
+                    <button class="btn btn-primary" onclick="window.uiController.switchTab('csp-solver')">
+                        <i data-lucide="play"></i> Re-run Benchmark
+                    </button>
+                </div>
+            </div>
+
+            <!-- Evaluation Empty State -->
+            <div id="evaluationEmptyState" class="glass-card" style="text-align: center; padding: 48px; display: none;">
+                <i data-lucide="activity" style="width: 48px; height: 48px; color: var(--text-tertiary); margin-bottom: 12px;"></i>
+                <h3 style="font-size: 18px; margin-bottom: 6px;">No Evaluation Data</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 18px;">Run the comparative benchmark to analyze backtracking reduction and execution times.</p>
+                <button class="btn btn-primary" onclick="window.uiController.switchTab('csp-solver')">
+                    <i data-lucide="play"></i> Run Solver Benchmark
+                </button>
+            </div>
+
+            <div id="evaluationContent">
+                <!-- Evaluation Highlight Cards -->
+                <div class="eval-summary-cards">
+                    <div class="glass-card eval-card">
+                        <div class="eval-header">Backtracking Reduction</div>
+                        <div class="eval-value-wrap">
+                            <span id="evalBacktrackReductionBadge" class="metric-delta positive">-0%</span>
+                            <span class="stat-footer-text">Fewer backtracks via MRV</span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card eval-card">
+                        <div class="eval-header">Scheduling Status</div>
+                        <div class="eval-value-wrap">
+                            <span class="badge badge-success" style="font-size: 13px; padding: 6px 12px;">
+                                <i data-lucide="check-circle-2"></i> 0 Student Clashes
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card eval-card" id="evalWinnerCard">
+                        <div class="winner-badge"><i data-lucide="award"></i> Recommended Heuristic: MRV</div>
+                        <p class="winner-reason">MRV pruned futile search branches early by choosing variables with the smallest remaining domain.</p>
+                    </div>
+                </div>
+
+                <!-- Comparison Table -->
+                <div class="glass-card" style="margin-bottom: 24px; padding: 12px;">
+                    <div class="card-header-clean" style="padding: 10px 14px 0 14px;">
+                        <div class="card-title-wrap">
+                            <i data-lucide="table" style="color: var(--apple-blue);"></i>
+                            <h3>Detailed Algorithm Metrics</h3>
+                        </div>
+                        <span class="badge badge-course">Identical Inputs & Constraints</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="glass-table">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th style="color: var(--apple-blue);">MRV (Minimum Remaining Values)</th>
+                                    <th style="color: var(--apple-orange);">Fixed Variable Ordering</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Backtracking Operations</strong></td>
+                                    <td id="evalMrvBacktracks" style="font-weight: 700; color: var(--apple-blue);">-</td>
+                                    <td id="evalFvoBacktracks" style="font-weight: 700; color: var(--apple-orange);">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Execution Time (ms)</strong></td>
+                                    <td id="evalMrvTime">-</td>
+                                    <td id="evalFvoTime">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Student Examination Clashes</strong></td>
+                                    <td id="evalMrvClashes">-</td>
+                                    <td id="evalFvoClashes">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Scheduling Status</strong></td>
+                                    <td id="evalMrvStatus">-</td>
+                                    <td id="evalFvoStatus">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Comparative Visual Charts -->
+                <div class="eval-charts-grid">
+                    <div class="glass-card">
+                        <div class="card-header-clean">
+                            <div class="card-title-wrap">
+                                <i data-lucide="bar-chart-2" style="color: var(--apple-blue);"></i>
+                                <h3>Total Backtracking Operations</h3>
+                            </div>
+                            <span class="badge badge-course">Lower is better</span>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="backtracksComparisonChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <div class="card-header-clean">
+                            <div class="card-title-wrap">
+                                <i data-lucide="clock" style="color: var(--apple-green);"></i>
+                                <h3>Execution Time (Milliseconds)</h3>
+                            </div>
+                            <span class="badge badge-success">Measured with performance.now()</span>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="executionTimeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CSP Theory Insight Card -->
+                <div class="glass-card" style="margin-top: 20px;">
+                    <div class="card-header-clean">
+                        <div class="card-title-wrap">
+                            <i data-lucide="book-marked" style="color: var(--apple-purple);"></i>
+                            <h3>CSP Analysis: Why MRV Reduces Backtracking</h3>
+                        </div>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                        <p style="margin-bottom: 10px;">
+                            The <strong>Minimum Remaining Values (MRV)</strong> heuristic—also known as the <em>Most Constrained Variable</em> or <em>Fail-First</em> heuristic—selects the variable with the fewest remaining legal values in its domain.
+                        </p>
+                        <p style="margin-bottom: 10px;">
+                            In contrast, <strong>Fixed Variable Ordering (FVO)</strong> assigns variables blindly according to a static list. If an unassigned course down the line has already had all its valid time slots wiped out by earlier assignments, Fixed Ordering continues to fruitlessly explore combinatorial branches before finally reaching that doomed course and realizing it cannot be scheduled.
+                        </p>
+                        <p>
+                            By prioritizing the course with the smallest domain, MRV detects unfeasible assignments immediately near the root of the search tree, pruning entire exponential subtrees of backtracks.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==========================================================================
+         MODALS & DIALOGS
+         ========================================================================== -->
+
+    <!-- Student Modal -->
+    <div id="studentModal" class="modal-backdrop">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3 id="studentModalTitle">Add Student</h3>
+                <button class="btn-icon" onclick="window.uiController.closeModal('studentModal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Student ID (e.g. S006)</label>
+                        <input type="text" id="studentFormId" class="form-control" placeholder="S006">
+                    </div>
+                    <div class="form-group">
+                        <label>Student Name</label>
+                        <input type="text" id="studentFormName" class="form-control" placeholder="Full Name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Enrolled Courses</label>
+                    <div id="studentCourseCheckboxes" class="checkbox-group-scroll">
+                        <!-- Checkboxes populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="window.uiController.closeModal('studentModal')">Cancel</button>
+                <button id="saveStudentBtn" class="btn btn-primary">Save Student</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Modal -->
+    <div id="courseModal" class="modal-backdrop">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3 id="courseModalTitle">Add Course</h3>
+                <button class="btn-icon" onclick="window.uiController.closeModal('courseModal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="courseFormId">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Course Code (e.g. CS105)</label>
+                        <input type="text" id="courseFormCode" class="form-control" placeholder="CS105">
+                    </div>
+                    <div class="form-group">
+                        <label>Credits</label>
+                        <input type="number" id="courseFormCredits" class="form-control" value="3" min="1" max="6">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Course Name</label>
+                    <input type="text" id="courseFormName" class="form-control" placeholder="e.g. Computer Graphics">
+                </div>
+                <div class="form-group">
+                    <label>Department</label>
+                    <input type="text" id="courseFormDept" class="form-control" placeholder="e.g. Computer Science">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="window.uiController.closeModal('courseModal')">Cancel</button>
+                <button id="saveCourseBtn" class="btn btn-primary">Save Course</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exam Slot Modal -->
+    <div id="slotModal" class="modal-backdrop">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3 id="slotModalTitle">Add Examination Slot</h3>
+                <button class="btn-icon" onclick="window.uiController.closeModal('slotModal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="slotFormId">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Slot Code (e.g. Slot 5)</label>
+                        <input type="text" id="slotFormCode" class="form-control" placeholder="Slot 5">
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="slotFormDate" class="form-control">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start Time</label>
+                        <input type="time" id="slotFormStart" class="form-control" value="09:00">
+                    </div>
+                    <div class="form-group">
+                        <label>End Time</label>
+                        <input type="time" id="slotFormEnd" class="form-control" value="12:00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Examination Room</label>
+                        <input type="text" id="slotFormRoom" class="form-control" placeholder="Main Exam Hall">
+                    </div>
+                    <div class="form-group">
+                        <label>Capacity</label>
+                        <input type="number" id="slotFormCap" class="form-control" value="120">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="window.uiController.closeModal('slotModal')">Cancel</button>
+                <button id="saveSlotBtn" class="btn btn-primary">Save Slot</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSV Import Modal -->
+    <div id="csvImportModal" class="modal-backdrop">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3>Import Student Enrolments CSV</h3>
+                <button class="btn-icon" onclick="window.uiController.closeModal('csvImportModal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 12px; color: var(--text-secondary);">
+                    Format expected: <code>Student ID, Student Name, Enrolled Courses (comma-separated)</code>
+                </p>
+                <div class="form-group">
+                    <label>Choose CSV File</label>
+                    <input type="file" id="csvFileInput" class="form-control" accept=".csv,text/plain">
+                </div>
+                <div class="form-group">
+                    <label>Or Paste CSV Content</label>
+                    <textarea id="csvPasteArea" class="form-control" rows="5" placeholder="Student ID, Student Name, Enrolled Courses&#10;S001, Arun, C101, C102&#10;S002, Bala, C101, C103"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="window.uiController.closeModal('csvImportModal')">Cancel</button>
+                <button id="submitCsvImportBtn" class="btn btn-primary">Import Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Inline Script for Subnav Tabs Switching -->
+    <script>
+        function showSubTable(tabName, btnEl) {
+            document.querySelectorAll('#section-enrolment .glass-card').forEach(c => {
+                if (c.id && c.id.startsWith('subTable-')) c.style.display = 'none';
+            });
+            document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('subTable-' + tabName);
+            if (target) target.style.display = 'block';
+            if (btnEl) btnEl.classList.add('active');
+        }
+    </script>
+
+    <!-- Application Modules Scripts -->
+    <script src="js/models.js"></script>
+    <script src="js/csp-solver.js"></script>
+    <script src="js/graph-visualizer.js"></script>
+    <script src="js/charts-manager.js"></script>
+    <script src="js/ui-controller.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
